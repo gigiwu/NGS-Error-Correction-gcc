@@ -11,6 +11,24 @@ int *res_mscls;
 int cnt_p;
 int num_of_seq_of_all_input;
 
+#define NUM_OF_BASE_TYPE 5
+
+class base_comp{
+  public:
+    int base_count[NUM_OF_BASE_TYPE];
+    base_comp()
+    {
+      for(int i=0; i<NUM_OF_BASE_TYPE; i++)
+      {
+        base_count[i] = 0;
+      }      
+    }
+
+};
+
+
+base_comp** count_all;
+
 /*******
 Similar pairs are obtained through callback function.
 Callback function should be implemented as follows.
@@ -41,6 +59,34 @@ int degree(const char* fasta_head1, const char* fasta_head2, TYPE_INDEX seqid1, 
     cerr<<cnt_p<<" pairs have been found\n";
   }
   **/
+
+  cout<<"it is degree method\n";
+  cout<<"----\n";
+  cout<<fasta_head1<<" , "<<fasta_head2<<" , "<<seqid1<<" , "<<seqid2<<"\n";
+  cout<<aln1<<"\n"; // not showing
+  cout<<aln2<<"\n"; // not showing
+  cout<<"----\n";
+
+  char base[] = "ATGC_";
+  for (int i = 0; i<aln_size; i++){
+    for(int j=0; j<NUM_OF_BASE_TYPE;j++){
+      
+        if(aln2[i]==base[j]){
+          cout<<aln2[i]<<":"<<base[j]<<"  ";
+          //count_all[seqid1][i].base_count[j]++;
+          //cout<<seqid1<<","<<i<<","<<j<<"\n";
+          //cout<<count_all[seqid1][i].base_count[j]<<"\n";
+        }
+        if(aln1[i]==base[j]){
+          cout<<aln1[i]<<":"<<base[j]<<"  ";
+          //count_all[seqid2][i].base_count[j]++;
+          //cout<<seqid2<<","<<i<<","<<j<<"\n";
+          cout<<count_all[seqid2][i].base_count[j]<<"\n";
+        }
+    }
+  }
+
+
   return(0);
 }
 
@@ -56,6 +102,12 @@ int degree2(const char* fasta_head1, const char* fasta_head2, TYPE_INDEX seqid1,
     cerr<<cnt_p<<" pairs have been found\n";
   }
   **/
+  cout<<"it is degree2 method";
+  cout<<"----\n";
+  cout<<fasta_head1<<" , "<<fasta_head2<<" , "<<seqid1<<" , "<<seqid2<<"\n";
+  cout<<aln1<<"\n";
+  cout<<aln2<<"\n";
+  cout<<"----\n";
   return(0);
 }
 
@@ -172,6 +224,38 @@ int main(int argc, char **argv)
     }
   }
 
+  count_all = (base_comp **)malloc(sizeof(base_comp *)*ml.showNumOfSeqs());
+  
+  count_all = new base_comp*[ml.showNumOfSeqs()];
+
+  for (int i=0; i<ml.showNumOfSeqs(); i++){
+    count_all[i] = (base_comp *)malloc(sizeof(base_comp)*ml.sq.max_seq_length);
+    
+    for( int j=0; j<ml.sq.max_seq_length;j++){
+      for(int k=0; k<NUM_OF_BASE_TYPE; k++){
+        count_all[i][j].base_count[k]=0;
+        //cout<<i<<","<<j<<","<<k<<"\n";
+        //cout<<count_all[i][j].base_count[k]<<"\n";
+      }
+    }
+  }
+/**
+  for(int i=0;i<ml.showNumOfSeqs();i++){
+    cout<<"seq "<<i<<"\n";
+  
+  for(int j=0;j<ml.sq.max_seq_length;j++){
+    cout<<"postion : "<<j<<"\n";
+    cout<<"A "<<count_all[i][j].base_count[DNA_A]<<" , ";
+    cout<<"T "<<count_all[i][j].base_count[DNA_T]<<" , ";
+    cout<<"G "<<count_all[i][j].base_count[DNA_G]<<" , ";
+    cout<<"C "<<count_all[i][j].base_count[DNA_C]<<" , ";
+    cout<<"_ "<<count_all[i][j].base_count[4]<<"\n";
+    cout<<"---------------------"<<"\n";
+    }
+    cout<<"====================="<<"\n\n";
+  }
+
+**/
   free(res_mscls);
 
   return (0);
