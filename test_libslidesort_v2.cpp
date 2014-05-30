@@ -176,13 +176,13 @@ int degree(const char* fasta_head1, const char* fasta_head2, TYPE_INDEX seqid1, 
   }
   **/
 
- 
+/** 
   cout<<"----\n";
   cout<<fasta_head1<<" , "<<fasta_head2<<" , "<<dist<<"\n";
   cout<<aln1<<"\n"; 
   cout<<aln2<<"\n"; 
   cout<<"----\n";
- 
+**/ 
   int gapCount1 = 0, gapCount2 = 0;
 
   for (int i = 0; i<aln_size; i++){
@@ -372,7 +372,6 @@ print errormap and output result file
 
 **/
 
-
 cerr<<"after degree"<<endl;
 
 cerr<<"errormap size:"<<errorMap.size()<<endl;
@@ -391,45 +390,6 @@ for(it=errorMap.begin(); it != errorMap.end(); it++){
 
 
 
-/**
-//gigi after degree
-  cout<<"\ndiff_percent_all\n================\n";
-for (int i=0; i<ml.showNumOfSeqs(); i++){
-  //string tmp;
-  //bool hasValue = false;
-  //tmp = ml.showFastaHeader(i);
-
-  cout<<ml.showFastaHeader(i)<<": ";
-  for( int j=0; j<ml.sq.max_seq_length;j++){
-    if (res_mscls[i] !=0)
-    {
-      diff_percent_all[i][j] /= (float) res_mscls[i];
-    }
-
-    cout<<diff_percent_all[i][j]<<" ";
-  }
-    cout<<"\n";
-}
-
-  cout<<"================\n";
-// gigi after degree end
-**/
-/**
-  for(int i=0;i<ml.showNumOfSeqs();i++){
-    cout<<"seq "<<i<<"\n";
-  
-  for(int j=0;j<ml.sq.max_seq_length;j++){
-    cout<<"postion : "<<j<<"\n";
-    cout<<"A "<<count_all[i][j].base_count[DNA_A]<<" , ";
-    cout<<"T "<<count_all[i][j].base_count[DNA_T]<<" , ";
-    cout<<"G "<<count_all[i][j].base_count[DNA_G]<<" , ";
-    cout<<"C "<<count_all[i][j].base_count[DNA_C]<<" , ";
-    cout<<"_ "<<count_all[i][j].base_count[4]<<"\n";
-    cout<<"---------------------"<<"\n";
-    }
-    cout<<"====================="<<"\n\n";
-  }
-**/
   free(res_mscls);
 
   return (0);
