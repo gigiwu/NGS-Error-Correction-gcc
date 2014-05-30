@@ -4,30 +4,112 @@
 //              test_libslidesort.cpp
 /***********************************************/
 
-#include<stdio.h>
+#include <stdio.h>
+#include <map>
+#include <string>
+#include <sstream>
+#include <fstream>
 #include "parallelslidesort.h"
 
 int *res_mscls;
 int cnt_p;
 int num_of_seq_of_all_input;
 
-#define NUM_OF_BASE_TYPE 5
+//gigi
+// base type: ATCG
+// used to be 5 types, but no gap in simulated data.
+int baseToIndex(char base){
+  if(base == 'A') return 0;
+  else if (base == 'T') return 1;
+  else if (base == 'C') return 2;
+  else if (base == 'G') return 3;
+  else if (base == '-') return 4;
+  else return -1;
+}
+char indexToBase(int idx){
+  char base[] = "ATCG-";
+  return base[idx]; 
+}
 
-class base_comp{
+#define NUM_OF_BASE_TYPE 5 //ATCG-
+#define BASE_COUNT_THRESHOLD 1
+
+//for hash implementation
+class BaseRecord{
   public:
-    int base_count[NUM_OF_BASE_TYPE];
-    base_comp()
-    {
-      for(int i=0; i<NUM_OF_BASE_TYPE; i++)
-      {
+    //fields
+    static int TOTAL;
+    int base_count[NUM_OF_BASE_TYPE]; //order:ATCG-
+    int total_count; // total increment of base_count
+    long seqid;
+    int pos;
+    char original_base;
+    char suspected_base;
+
+    //constructor
+    BaseRecord(int baseIndex, long seqid, int pos, char original_base){
+      for(int i=0; i<NUM_OF_BASE_TYPE; i++){
         base_count[i] = 0;
-      }      
+      }
+      base_count[baseIndex]++;
+      TOTAL++;
+      total_count = 1;
+      this->seqid = seqid;
+      this->pos = pos;
+      this->original_base = original_base;
+      this->suspected_base = original_base; // default suspected_base = original_base
     }
 
+    //method
+    void increment(int b){
+      base_count[b]++;
+      total_count++;
+    }
+    int getBaseCount(int baseIndex){
+      return base_count[baseIndex];
+    }
+    void printAllBaseCount(){
+      for(int i=0; i<NUM_OF_BASE_TYPE; i++){
+        cout<<this->getBaseCount(i);
+        if(i+1!=NUM_OF_BASE_TYPE)
+          cout<<",";
+      }
+      cout<<endl;
+    }
+    void voteResultbyMax(){
+      //cout<<"voting!! total_count:"<<total_count<<endl;
+      int idxOfMax = 0;
+      for(int i=0;i<NUM_OF_BASE_TYPE-1;i++){
+        if (base_count[i] > base_count[idxOfMax]){
+          idxOfMax = i;
+        }
+      }
+
+
+      if(base_count[idxOfMax] > BASE_COUNT_THRESHOLD)
+        suspected_base = indexToBase(idxOfMax);
+    }
+
+    void voteResultbyRatio(){
+
+    }
+    //only print when suspected_base is different from original one 
+    void printResult(){
+      //cout<<"printResult: "<<seqid<<"-"<<pos<<endl;
+      if(suspected_base != original_base)
+        cout<<seqid<<","<<pos<<","<<suspected_base<<","<<original_base<<endl;
+    }
+    void printResultWithBaseCount(){
+      //cout<<"printResult: "<<seqid<<"-"<<pos<<endl;
+      if(suspected_base != original_base){
+        cout<<seqid<<","<<pos<<","<<suspected_base<<","<<original_base<<",";
+        this->printAllBaseCount();
+      }
+    }
 };
+int BaseRecord::TOTAL = 0;
 
-
-base_comp** count_all;
+map<string,BaseRecord> errorMap;
 
 /*******
 Similar pairs are obtained through callback function.
@@ -47,6 +129,40 @@ Each argument shows following information.
 - Aligned size of a pair
 *********/
 
+
+
+
+// hash implementation
+
+/**
+Update error map when distinct base shows at the same pos of similar pair
+  if key not exists -> create BaseRecord value
+  else -> increment
+**/
+void updateErrorMap(TYPE_INDEX seqid, int pos, char pairedBase, char original_base){
+  stringstream ss;
+  map<string, BaseRecord>::iterator it;
+  ss << seqid << "-" << pos;
+  string key = ss.str();
+  ss.str("");
+
+  //check if key exists
+  if(errorMap.find(key) == errorMap.end()){
+    //cout<<"create new key:"<<seqid<<","<<pos<<","<<pairedBase<<","<<original_base<<endl;
+    BaseRecord value(baseToIndex(pairedBase), seqid, pos, original_base);
+    errorMap.insert(pair<string,BaseRecord>(key,value)); 
+  }
+  else{
+  //print current value according to key
+    //cout<<"found existed key"<<endl;
+    it=errorMap.find(key);
+    BaseRecord br = it->second;
+    //br.printAllBaseCount();
+    br.increment(baseToIndex(pairedBase));
+    it->second = br;
+  }
+}
+
 int degree(const char* fasta_head1, const char* fasta_head2, TYPE_INDEX seqid1, TYPE_INDEX seqid2, char* aln1, char* aln2, double dist,int aln_size)
 {
   res_mscls[seqid1]++;
@@ -60,36 +176,40 @@ int degree(const char* fasta_head1, const char* fasta_head2, TYPE_INDEX seqid1, 
   }
   **/
 
-  cout<<"it is degree method\n";
+ 
   cout<<"----\n";
-  cout<<fasta_head1<<" , "<<fasta_head2<<" , "<<seqid1<<" , "<<seqid2<<"\n";
-  cout<<aln1<<"\n"; // not showing
-  cout<<aln2<<"\n"; // not showing
+  cout<<fasta_head1<<" , "<<fasta_head2<<" , "<<dist<<"\n";
+  cout<<aln1<<"\n"; 
+  cout<<aln2<<"\n"; 
   cout<<"----\n";
+ 
+  int gapCount1 = 0, gapCount2 = 0;
 
-  char base[] = "ATGC_";
   for (int i = 0; i<aln_size; i++){
-    for(int j=0; j<NUM_OF_BASE_TYPE;j++){
-      
-        if(aln2[i]==base[j]){
-          cout<<aln2[i]<<":"<<base[j]<<"  ";
-          //count_all[seqid1][i].base_count[j]++;
-          //cout<<seqid1<<","<<i<<","<<j<<"\n";
-          //cout<<count_all[seqid1][i].base_count[j]<<"\n";
-        }
-        if(aln1[i]==base[j]){
-          cout<<aln1[i]<<":"<<base[j]<<"  ";
-          //count_all[seqid2][i].base_count[j]++;
-          //cout<<seqid2<<","<<i<<","<<j<<"\n";
-          cout<<count_all[seqid2][i].base_count[j]<<"\n";
-        }
+
+    bool hasGap = false; 
+    
+    char base1 = aln1[i];
+    char base2 = aln2[i];
+
+    if(base1 == '-') {gapCount1++; hasGap=true;}
+    if(base2 == '-') {gapCount2++; hasGap=true;}
+
+    if((base1 != base2) && !hasGap){
+
+      updateErrorMap(seqid1, i-gapCount1, base2, base1);
+      updateErrorMap(seqid2, i-gapCount2, base1, base2);
+
     }
+
   }
-
-
+  
   return(0);
 }
 
+// hash implementation ends
+
+// run if (ml.co.isRevComp) 
 int degree2(const char* fasta_head1, const char* fasta_head2, TYPE_INDEX seqid1, TYPE_INDEX seqid2, char* aln1, char* aln2, double dist,int aln_size)
 {
   res_mscls[seqid1/2]++;
@@ -102,6 +222,8 @@ int degree2(const char* fasta_head1, const char* fasta_head2, TYPE_INDEX seqid1,
     cerr<<cnt_p<<" pairs have been found\n";
   }
   **/
+
+
   cout<<"it is degree2 method";
   cout<<"----\n";
   cout<<fasta_head1<<" , "<<fasta_head2<<" , "<<seqid1<<" , "<<seqid2<<"\n";
@@ -118,7 +240,11 @@ int main(int argc, char **argv)
 	In default setting, slidesort output all pairs to STDOUT.
 	I recommend to use "-l" option which disables outputting pairs, if you run slidesort on big data.
 **/
-
+  
+ /**
+ read file again 
+  store quality score  
+**/
   cnt_p=0;
   //multisort ml;  // create object
   parallelslidesort ml;  // create object
@@ -139,9 +265,11 @@ int main(int argc, char **argv)
   string showSequence(TYPE_INDEX seqid); // show a sequence of seqid
   TYPE_LONG showNumOfPairs(); // show total number of pairs
   TYPE_INDEX showNumOfSeqs(); // show total number of sequences. If you run slidesort with default setting, sequences including unknown character (e.g. n, N, Z, X) are excluded. If using -v, number of sequence is doubled for including reverse complement sequences.
-  static TYPE_INDEX showRevCompID(TYPE_INDEX seqid); // If you use -v option, this function shows ID of Reverse complement sequence of seqid.
+  static TYPE_INDEX showRevCompID(TYPE_INDEX seqid); // If you use -v option, this function shows ID of Reverse complement sequence of seqid
 
 **/
+
+
 
   // if parameters are obtained from command line
   if(ml.getParam(argc, argv)<0) return (1);
@@ -149,12 +277,14 @@ int main(int argc, char **argv)
   // -o ml.co.outputfile set to false
   ml.co.outputfile = false;
 
+
   //set callback function
   if (ml.co.isRevComp) {
     ml.setResGetFuncPtr(degree2);
   } else {
     ml.setResGetFuncPtr(degree);
   }
+
 
   /**
   If you would like to set parameters by the code, 
@@ -202,6 +332,13 @@ int main(int argc, char **argv)
   ml.getParam(inco);
   **/
 
+  cmlOptions inco;  // An object for setting options.
+  // set output
+  inco.outputfile=true; // set true if outputting file. set false if not.
+  inco.outputFileName="output.txt"; // set output file name. set "-" if outputting result in stdout.
+  inco.outputaln = true; // set true if outputting alignment for each pair, set false if not.
+
+
   num_of_seq_of_all_input = ml.showNumOfSeqs();
   if (ml.co.isRevComp) {
      num_of_seq_of_all_input /= 2;
@@ -211,34 +348,72 @@ int main(int argc, char **argv)
   memset(res_mscls,0x00,sizeof(TYPE_INDEX)*num_of_seq_of_all_input);
   if(ml.exec() < 0) return (1);
 
+
   cerr<<"num of similar pairs = "<<ml.showNumOfPairs()<<"\n";
   cerr<<"num of sequences = "<<ml.showNumOfSeqs()<<"\n";
 
+//comment out by gigi
+/**
   if (ml.co.isRevComp) {
     for(int i=0;i<num_of_seq_of_all_input;i++){
-      cout<<ml.showFastaHeader(i*2)<<": "<<res_mscls[i]<<"\n";
+      cerr<<ml.showFastaHeader(i*2)<<": "<<res_mscls[i]<<"\n";
     }
   } else {
     for(int i=0;i<num_of_seq_of_all_input;i++){
-      cout<<ml.showFastaHeader(i)<<": "<<res_mscls[i]<<"\n";
+      cerr<<ml.showFastaHeader(i)<<": "<<res_mscls[i]<<"\n";
     }
   }
+**/
+/**
 
-  count_all = (base_comp **)malloc(sizeof(base_comp *)*ml.showNumOfSeqs());
-  
-  count_all = new base_comp*[ml.showNumOfSeqs()];
+*** hash version ****
+gigi after degree 
+print errormap and output result file
 
-  for (int i=0; i<ml.showNumOfSeqs(); i++){
-    count_all[i] = (base_comp *)malloc(sizeof(base_comp)*ml.sq.max_seq_length);
-    
-    for( int j=0; j<ml.sq.max_seq_length;j++){
-      for(int k=0; k<NUM_OF_BASE_TYPE; k++){
-        count_all[i][j].base_count[k]=0;
-        //cout<<i<<","<<j<<","<<k<<"\n";
-        //cout<<count_all[i][j].base_count[k]<<"\n";
-      }
+**/
+
+
+cerr<<"after degree"<<endl;
+
+cerr<<"errormap size:"<<errorMap.size()<<endl;
+cout<<"seq,pos,correct_base,error_base";
+cout<<",A,T,C,G,-";
+cout<<endl;
+map<string, BaseRecord>::iterator it;
+for(it=errorMap.begin(); it != errorMap.end(); it++){
+  //cout <<it->first<<endl;
+  BaseRecord br = it->second;
+
+  br.voteResultbyMax();
+  //br.printResult();
+  br.printResultWithBaseCount();
+}
+
+
+
+/**
+//gigi after degree
+  cout<<"\ndiff_percent_all\n================\n";
+for (int i=0; i<ml.showNumOfSeqs(); i++){
+  //string tmp;
+  //bool hasValue = false;
+  //tmp = ml.showFastaHeader(i);
+
+  cout<<ml.showFastaHeader(i)<<": ";
+  for( int j=0; j<ml.sq.max_seq_length;j++){
+    if (res_mscls[i] !=0)
+    {
+      diff_percent_all[i][j] /= (float) res_mscls[i];
     }
+
+    cout<<diff_percent_all[i][j]<<" ";
   }
+    cout<<"\n";
+}
+
+  cout<<"================\n";
+// gigi after degree end
+**/
 /**
   for(int i=0;i<ml.showNumOfSeqs();i++){
     cout<<"seq "<<i<<"\n";
@@ -254,7 +429,6 @@ int main(int argc, char **argv)
     }
     cout<<"====================="<<"\n\n";
   }
-
 **/
   free(res_mscls);
 
