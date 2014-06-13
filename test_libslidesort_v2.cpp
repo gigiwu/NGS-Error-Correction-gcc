@@ -11,6 +11,11 @@
 #include <fstream>
 #include "parallelslidesort.h"
 
+#if 0
+#define DEBUG_UPDATE_ERROR 
+#define DEBUG_DEGREE 
+#endif
+
 int *res_mscls;
 int cnt_p;
 int num_of_seq_of_all_input;
@@ -148,13 +153,17 @@ void updateErrorMap(TYPE_INDEX seqid, int pos, char pairedBase, char original_ba
 
   //check if key exists
   if(errorMap.find(key) == errorMap.end()){
-    //cout<<"create new key:"<<seqid<<","<<pos<<","<<pairedBase<<","<<original_base<<endl;
+    #ifdef DEBUG_UPDATE_ERROR
+    cout<<"create new key:"<<seqid<<","<<pos<<","<<pairedBase<<","<<original_base<<endl;
+    #endif
     BaseRecord value(baseToIndex(pairedBase), seqid, pos, original_base);
     errorMap.insert(pair<string,BaseRecord>(key,value)); 
   }
   else{
   //print current value according to key
-    //cout<<"found existed key"<<endl;
+    #ifdef DEBUG_UPDATE_ERROR
+    cout<<"found existed key"<<endl;
+    #endif
     it=errorMap.find(key);
     BaseRecord br = it->second;
     //br.printAllBaseCount();
@@ -196,7 +205,15 @@ int degree(const char* fasta_head1, const char* fasta_head2, TYPE_INDEX seqid1, 
     if(base2 == '-') {gapCount2++; hasGap=true;}
 
     if((base1 != base2) && !hasGap){
-
+      #ifdef DEBUG_DEGREE
+      cout<<"----\n";
+      cout<<fasta_head1<<" , "<<fasta_head2<<" , "<<dist<<"\n";
+      cout<<aln1<<"\n"; 
+      cout<<aln2<<"\n"; 
+      cout<<"----\n";
+      cout<<seqid1<<", i:"<<i<<", gapCount1:"<<gapCount1<<", base1:"<<base1<<endl;
+      cout<<seqid2<<", i:"<<i<<", gapCount2:"<<gapCount2<<", base2:"<<base2<<endl;
+      #endif
       updateErrorMap(seqid1, i-gapCount1, base2, base1);
       updateErrorMap(seqid2, i-gapCount2, base1, base2);
 
