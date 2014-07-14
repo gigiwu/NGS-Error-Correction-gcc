@@ -9,12 +9,19 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <math.h>
 #include "parallelslidesort.h"
 
+//#define SIMPLE_METHOD
+#define AFFINITY_METHOD
 #if 0
 #define DEBUG_UPDATE_ERROR 
 #define DEBUG_DEGREE 
 #endif
+
+#define WEIGHT 0.9f
+#define SCALE_WEIGHT
+//#define NON_SCALE_WEIGHT
 
 int *res_mscls;
 int cnt_p;
@@ -50,6 +57,22 @@ class BaseRecord{
     int pos;
     char original_base;
     char suspected_base;
+    int affinity_count;
+
+    //constructor without initial count
+    BaseRecord(long seqid, int pos, char original_base){
+      for(int i=0; i<NUM_OF_BASE_TYPE; i++){
+        base_count[i] = 0;
+      }
+      TOTAL++;
+      total_count = 0;
+      affinity_count = 0;
+      this->seqid = seqid;
+      this->pos = pos;
+      this->original_base = original_base;
+      this->suspected_base = original_base; // default suspected_base = original_base
+    }
+
 
     //constructor
     BaseRecord(int baseIndex, long seqid, int pos, char original_base){
@@ -59,6 +82,7 @@ class BaseRecord{
       base_count[baseIndex]++;
       TOTAL++;
       total_count = 1;
+      affinity_count = 0;
       this->seqid = seqid;
       this->pos = pos;
       this->original_base = original_base;
@@ -70,9 +94,11 @@ class BaseRecord{
       base_count[b]++;
       total_count++;
     }
+
     int getBaseCount(int baseIndex){
       return base_count[baseIndex];
     }
+
     void printAllBaseCount(){
       for(int i=0; i<NUM_OF_BASE_TYPE; i++){
         cout<<this->getBaseCount(i);
@@ -81,6 +107,7 @@ class BaseRecord{
       }
       cout<<endl;
     }
+
     void voteResultbyMax(){
       //cout<<"voting!! total_count:"<<total_count<<endl;
       int idxOfMax = 0;
@@ -95,8 +122,10 @@ class BaseRecord{
         suspected_base = indexToBase(idxOfMax);
     }
 
-    void voteResultbyRatio(){
+    void nomalizeCounts(){
+      for(int i=0;i<NUM_OF_BASE_TYPE;i++){
 
+      }
     }
     //only print when suspected_base is different from original one 
     void printResult(){
@@ -111,10 +140,38 @@ class BaseRecord{
         this->printAllBaseCount();
       }
     }
+
+    void addWithWeight(BaseRecord otherBR, float weight){
+      for(int i=0;i<NUM_OF_BASE_TYPE;i++){
+          base_count[i] += otherBR.base_count[i] * weight;
+      }
+
+      total_count = 0;
+      for(int i=0;i<NUM_OF_BASE_TYPE;i++){
+        total_count += base_count[i];
+      }
+    }
+
+    void addWithScaledWeight(BaseRecord otherBR, float weight){
+      affinity_count++;
+      double scaledWeight = pow(weight,affinity_count);
+      for(int i=0;i<NUM_OF_BASE_TYPE;i++){
+        int score = int(otherBR.base_count[i] * scaledWeight +0.5);
+        if(score > 0)
+          base_count[i] += score;
+      }
+
+      total_count = 0;
+      for(int i=0;i<NUM_OF_BASE_TYPE;i++){
+        total_count += base_count[i];
+      }
+    }
 };
 int BaseRecord::TOTAL = 0;
 
-map<string,BaseRecord> errorMap;
+typedef map<string,BaseRecord> BaseRecordMap;
+BaseRecordMap errorMap;
+
 
 /*******
 Similar pairs are obtained through callback function.
@@ -172,6 +229,62 @@ void updateErrorMap(TYPE_INDEX seqid, int pos, char pairedBase, char original_ba
   }
 }
 
+BaseRecordMap::iterator findBaseRecord(TYPE_INDEX seqid1, int pos1, char base1){
+  stringstream ss;
+  BaseRecordMap::iterator it1;
+  ss << seqid1 << "-" << pos1;
+  string key1 = ss.str();
+  ss.str("");
+  
+  //check if key1 exists
+  it1 =errorMap.find(key1);
+  if(it1 == errorMap.end()){
+    // create without initial count
+    BaseRecord br1(seqid1, pos1, base1);
+    it1 = errorMap.insert(it1, pair<string,BaseRecord>(key1,br1)); 
+  }
+
+  return it1;
+}
+
+
+void updateMapWithAffinity(TYPE_INDEX seqid1, TYPE_INDEX seqid2, int pos1, int pos2, char base1, char base2, double weight){
+  stringstream ss;
+
+  ss << seqid1 << "-" << pos1;
+  string key1 = ss.str();
+  ss.str("");
+  ss << seqid2 << "-" << pos2;
+  string key2 = ss.str();
+  ss.str("");
+
+  BaseRecordMap::iterator it1 = findBaseRecord(seqid1,pos1,base1);
+  BaseRecordMap::iterator it2 = findBaseRecord(seqid2,pos2,base2);
+
+  BaseRecord br1 = it1->second;
+  BaseRecord br2 = it2->second;
+
+  #ifdef NON_SCALE_WEIGHT 
+  br1.addWithWeight(br2,weight);
+  br1.increment(baseToIndex(base2));
+  br2.addWithWeight(br1,weight);
+  br2.increment(baseToIndex(base1));
+  #endif
+
+
+  #ifdef SCALE_WEIGHT 
+  br1.addWithScaledWeight(br2,weight);
+  br1.increment(baseToIndex(base2));
+  br2.addWithScaledWeight(br1,weight);
+  br2.increment(baseToIndex(base1));
+  #endif
+
+
+  it1->second = br1;
+  it2->second = br2; 
+
+
+}
 int degree(const char* fasta_head1, const char* fasta_head2, TYPE_INDEX seqid1, TYPE_INDEX seqid2, char* aln1, char* aln2, double dist,int aln_size)
 {
   res_mscls[seqid1]++;
@@ -203,9 +316,20 @@ int degree(const char* fasta_head1, const char* fasta_head2, TYPE_INDEX seqid1, 
 
     if(base1 == '-') {gapCount1++; hasGap=true;}
     if(base2 == '-') {gapCount2++; hasGap=true;}
+    
+    #ifdef AFFINITY_METHOD
+    if(!hasGap){
 
+      //updateMapWithAffinity(seqid1, i-gapCount1, base2, base1);
+      //updateMapWithAffinity(seqid2, i-gapCount2, base1, base2);
+   
+      updateMapWithAffinity(seqid1, seqid2, i-gapCount1, i-gapCount2, base1, base2, WEIGHT);
+    }
+    #endif
+    
+    #ifdef SIMPLE_METHOD
     if((base1 != base2) && !hasGap){
-      #ifdef DEBUG_DEGREE
+      # ifdef DEBUG_DEGREE
       cout<<"----\n";
       cout<<fasta_head1<<" , "<<fasta_head2<<" , "<<dist<<"\n";
       cout<<aln1<<"\n"; 
@@ -213,12 +337,12 @@ int degree(const char* fasta_head1, const char* fasta_head2, TYPE_INDEX seqid1, 
       cout<<"----\n";
       cout<<seqid1<<", i:"<<i<<", gapCount1:"<<gapCount1<<", base1:"<<base1<<endl;
       cout<<seqid2<<", i:"<<i<<", gapCount2:"<<gapCount2<<", base2:"<<base2<<endl;
-      #endif
+      # endif
       updateErrorMap(seqid1, i-gapCount1, base2, base1);
       updateErrorMap(seqid2, i-gapCount2, base1, base2);
 
     }
-
+    #endif
   }
   
   return(0);
@@ -365,7 +489,7 @@ int main(int argc, char **argv)
   memset(res_mscls,0x00,sizeof(TYPE_INDEX)*num_of_seq_of_all_input);
   if(ml.exec() < 0) return (1);
 
-
+  cerr<<"weight = "<<WEIGHT<<endl;
   cerr<<"num of similar pairs = "<<ml.showNumOfPairs()<<"\n";
   cerr<<"num of sequences = "<<ml.showNumOfSeqs()<<"\n";
 
